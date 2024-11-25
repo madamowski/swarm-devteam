@@ -6,9 +6,12 @@ import textwrap
 import argparse
 import os
 
+from tools.developer_tool import ask_to_code
+
 load_dotenv()
 
-ollama = False
+ollama = False # mixed results
+use_custom_dev_model = True # use Quen to do coding instead of main model
 
 def get_team():
     if ollama:
@@ -16,16 +19,13 @@ def get_team():
             base_url="http://localhost:11434/v1",
             api_key="ollama"
         )
-
-        model = "llama3.2"
-        dev_model = "qwen2.5-coder:32b-base-q3_K_M"
-        return Swarm(client=ollama_client), model, dev_model
+        model = "llama3.2"        
+        return Swarm(client=ollama_client), model
     else:
-        model = "gpt-4o"
-        dev_model = model
-        return Swarm(), model, dev_model
+        model = "gpt-4o"        
+        return Swarm(), model
     
-team, model, dev_model = get_team()
+team, model = get_team()
 
 def print_msg(msg:dict, header:str, text: str = None):
     print("-" * 50)
@@ -119,19 +119,30 @@ def developer_instructions(context_variables:dict):
     instructions = context_variables.get("instructions")
     function_template = context_variables.get("function_template")
     unit_test = context_variables.get("unit_test")
-    return f"""
+
+    if(use_custom_dev_model):
+        return f"""
+Use ask_to_code to implement provided 'function_template' according to provided 'instructions'.
+When you receive reply do not test anything and always report back to MANAGER agent
+by calling transfer_back_to_manager_from_developer tool passing implemented function as 'test_function'.
+                """
+    else:
+        return f"""
 You are experienced python developer.
 Your sole reponsibility is to implement provided 'function_template' according to provided 'instructions'.
 When you finish implementation do not test anything and always report back to MANAGER agent
 by calling transfer_back_to_manager_from_developer tool passing implemented function as 'test_function'.
-    """
+        """
 
 agent_developer = Agent(
     name="DEVELOPER",
-    model=dev_model,
+    model=model,
     instructions=developer_instructions,
     functions=[transfer_back_to_agent_manager_from_developer]
 )
+
+if use_custom_dev_model :
+    agent_developer.functions.append(ask_to_code)
 
 def tester_instructions(context_variables:dict):
     test_id = context_variables.get("test_id")
@@ -146,7 +157,7 @@ When you finish reply back to MANAGER agent by calling transfer_back_to_manager_
 
 agent_tester = Agent(
     name="TESTER",
-    model=dev_model,
+    model=model,
     instructions=tester_instructions,
     functions=[transfer_back_to_agent_manager_from_tester]
 )
