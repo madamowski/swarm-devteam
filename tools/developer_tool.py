@@ -53,7 +53,7 @@ Implement sum() function based on the provided function signature.
 def sum(a: int, b: int) -> int:
 ```
 """
-       answer = ask_ollama(question)
+       answer = ask_to_code(question)
        print(f"Question: {question}")
        print(f"Answer: {answer}")
        
