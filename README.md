@@ -36,6 +36,7 @@ It can be used to run [exercism python exercises](https://github.com/exercism/py
   | - .docs/instructions.md
   | - <task>.py
   | - <task>_test.py
+```
 
 ## Ollama
 
