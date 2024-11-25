@@ -2,7 +2,7 @@
 name = "swarm-devteam"
 version = "0.1.0"
 description = ""
-authors = ["Marcin Adamowski]
+authors = ["Marcin Adamowski"]
 readme = "README.md"
 
 [tool.poetry.dependencies]

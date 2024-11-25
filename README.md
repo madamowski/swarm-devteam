@@ -6,7 +6,7 @@ Sample [Open AI Swarm](https://github.com/openai/swarm/) development team implem
 
 Manager + Developer + Tester + Reporter
 
-Team is reponsible to write and test python function based on instructions and function template.
+Team is reponsible to write and test python function based on instructions and function signature.
 
 ## Setup
 
@@ -24,10 +24,18 @@ poetry install
 ## Run
 ```
 poetry shell
-python run.py
+python run.py <task>
 ```
+task - subfolder in `tasks` folder that contains task details in format used by [Aider Benchmark](https://aider.chat/docs/benchmarks.html#the-benchmark)
 
-See `context_variables` for inputs
+It can be used to run [exercism python exercises](https://github.com/exercism/python/tree/main/exercises/practice)
+
+```
+- tasks
+  - <task>
+  | - .docs/instructions.md
+  | - <task>.py
+  | - <task>_test.py
 
 ## Ollama
 

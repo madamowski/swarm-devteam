@@ -3,6 +3,8 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import json
 import textwrap
+import argparse
+import os
 
 load_dotenv()
 
@@ -97,6 +99,8 @@ def manager_instructions(context_variables:dict):
     2) After you receive 'test_function' from DEVELOPER you are also responsible to delegate testing task to TESTER agent
        - Send the 'test_function' and 'unit_test' ({unit_test}) to TESTER.
        - Expect PASS or FAIL 'test_result' back
+       - If you receive FAIL 'test_result' send failure details to DEVELOPER agent and ask him to improve the code.
+       - Iterate maximum 5 times. If you still receive FAIL 'test_result' back from TESTER agent, continue to task 3)
     3) After you receive that information from TESTER you are also responsible to delegate reporting task to REPORTER agent
        - Send 'test_function' and 'test_status' to REPORTER agent
        - Expect written 'report' back
@@ -156,7 +160,7 @@ def reporter_instructions(context_variables:dict):
 You should receive these 2 inputs 'test_function' and 'test_result'
 Fill in the following template with the given information, ensuring no new or inferred details are added. 
 Only use the provided data, and maintain the format strictly as shown below:
-{test_id}: 'test_result'  
+'test_result'  
 'implemented_function'
 
 When you finish reply back to MANAGER agent by calling transfer_back_to_manager_from_reporter with your 'report'
@@ -169,43 +173,79 @@ agent_reporter = Agent(
     functions=[transfer_back_to_agent_manager_from_reporter]
 )
 
-context_variables = {
-    "test_id": "TEST_1",
-    "instructions": """
-Implement sum() function based on the provided FUNCTION definition
-""",
-    "function_template": "def sum(a: int, b: int) -> int:", 
-    "unit_test": """
-def test_sum():
-    assert sum(1, 2) == 3
-    assert sum(-1, 1) == 0
-    assert sum(0, 0) == 0
-"""
-}
+def load_task(task_name: str) -> dict:    
+    task_path = f"tasks/{task_name}"
+    with open(os.path.join(task_path,".docs/instructions.md"), 'r') as f:
+        instructions = f.read()
+
+    with open(os.path.join(task_path,f"{task_name}.py"), 'r') as f:
+        src = f.read()
+
+    with open(os.path.join(task_path,f"{task_name}_test.py"), 'r') as f:
+        test = f.read()
+        
+    return {
+        "test_id": task_name,
+        "instructions": instructions,
+        "function_template": src,
+        "unit_test": test
+    }
+
+def write_result(run_id: str, task_name: str, result: str):
+
+    output_path = "output"
+    os.makedirs(output_path, exist_ok=True)
+
+    output_task_path = os.path.join(output_path, task_name)
+    os.makedirs(output_task_path, exist_ok=True)
+
+    # REPORT should be in this format
+    lines = result.strip().splitlines()
+    first = lines[0]
+    code = '\n'.join(lines[1:]) if len(lines) > 1 else ''
+    code_cleaned = code.strip().removeprefix('```python').removesuffix('```').strip()
+
+    with open(os.path.join(output_task_path,f"{task_name}_{run_id}_{first}.py"), 'w') as f:
+        f.write(code_cleaned)
+
+def main():
+    parser = argparse.ArgumentParser(description="Run task")
+    parser.add_argument("task", help="Task from tasks folder (e.g., 'sum_function')")
+    args = parser.parse_args()
+
+    from datetime import datetime
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    context_variables = load_task(args.task)
+
+    task = '''Implement code based on 'instructions'. Test it and write report'''
+
+    response = team.run(
+        agent=agent_manager,
+        messages=[{"role": "user", "content": task}],
+        context_variables=context_variables
+    )
+
+    print_msg(context_variables, '👤 user 👤', task)
+    for msg in response.messages:
+        print()
+        if msg['role'] == 'assistant':
+            print_msg(msg, "'🤖 assistant 🤖'")
+        elif msg['role'] == 'tool':
+            print_msg(msg,'⚙️  tool ⚙️')
+        else:
+            print_msg(msg,'? unknown ?')
+
+    text = '''Agent:
+    {0}
+    Response:
+    {1}'''.format(textwrap.indent(str(response.agent), '  '), textwrap.indent(str(response.messages[-1]["content"]), '  '))
+
+    print('')
+    print_msg(None, '🏁 result 🏁', text)
+
+    write_result(run_id, args.task, str(response.messages[-1]["content"]))
 
 
-task = '''Implement, test and write a report related to new function implementation'''
-
-response = team.run(
-    agent=agent_manager,
-    messages=[{"role": "user", "content": task}],
-    context_variables=context_variables
-)
-
-print_msg(context_variables, '👤 user 👤', task)
-for msg in response.messages:
-    print()
-    if msg['role'] == 'assistant':
-        print_msg(msg, "'🤖 assistant 🤖'")
-    elif msg['role'] == 'tool':
-        print_msg(msg,'⚙️  tool ⚙️')
-    else:
-        print_msg(msg,'? unknown ?')
-
-text = '''Agent:
-{0}
-Response:
-{1}'''.format(textwrap.indent(str(response.agent), '  '), textwrap.indent(str(response.messages[-1]["content"]), '  '))
-
-print('')
-print_msg(None, '🏁 result 🏁', text)
+if __name__ == '__main__':
+    main()
